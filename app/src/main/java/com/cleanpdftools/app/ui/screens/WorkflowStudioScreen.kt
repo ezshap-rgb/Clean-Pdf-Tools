@@ -239,14 +239,12 @@ private fun ReplacePageRecipeView(
     var repName by remember { mutableStateOf("") }
     var repPages by remember { mutableIntStateOf(0) }
     var repPageNum by remember { mutableIntStateOf(1) }
-    var outputName by remember { mutableStateOf("replaced_page_doc") }
+    var showSaveDialog by remember { mutableStateOf(false) }
 
     val basePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             baseUri = uri
-            val name = getFileName(context, uri)
-            baseName = name
-            outputName = "replaced_${name.removeSuffix(".pdf")}"
+            baseName = getFileName(context, uri)
             scope.launch {
                 basePages = PdfEngine.getPageCount(context, uri)
                 targetPage = 1
@@ -370,12 +368,6 @@ private fun ReplacePageRecipeView(
 
         // Section 3: Execute Action
         item {
-            Spacer(modifier = Modifier.height(4.dp))
-            OutputFileNameField(
-                value = outputName,
-                onValueChange = { outputName = it }
-            )
-            Spacer(modifier = Modifier.height(10.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -385,33 +377,43 @@ private fun ReplacePageRecipeView(
                 StudioPrimaryButton(
                     text = "Run 'Replace Page' Workflow",
                     enabled = baseUri != null && repUri != null,
-                    onClick = {
-                        onStartProcessing("Replacing Page $targetPage with Page $repPageNum...")
-                        scope.launch {
-                            try {
-                                val outFile = fileRepo.createOutputFile(outputName.ifBlank { "replaced_p${targetPage}_${baseName.removeSuffix(".pdf")}" })
-                                val result = WorkflowEngine.executeReplacePage(
-                                    context = context,
-                                    baseUri = baseUri!!,
-                                    targetPage1Based = targetPage,
-                                    replacementUri = repUri!!,
-                                    replacementPage1Based = repPageNum,
-                                    outputFile = outFile,
-                                    onProgress = { prog -> onStartProcessing(prog.stepDescription) }
-                                )
-                                fileRepo.refreshFiles()
-                                onEndProcessing()
-                                Toast.makeText(context, "Page $targetPage successfully replaced!", Toast.LENGTH_SHORT).show()
-                                onFinished(result)
-                            } catch (e: Exception) {
-                                onEndProcessing()
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    onClick = { showSaveDialog = true }
                 )
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "replaced_p${targetPage}_${baseName.removeSuffix(".pdf")}",
+            title = "Save Replaced PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                onStartProcessing("Replacing Page $targetPage with Page $repPageNum...")
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = WorkflowEngine.executeReplacePage(
+                            context = context,
+                            baseUri = baseUri!!,
+                            targetPage1Based = targetPage,
+                            replacementUri = repUri!!,
+                            replacementPage1Based = repPageNum,
+                            outputFile = outFile,
+                            onProgress = { prog -> onStartProcessing(prog.stepDescription) }
+                        )
+                        fileRepo.refreshFiles()
+                        onEndProcessing()
+                        Toast.makeText(context, "Page $targetPage successfully replaced!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        onEndProcessing()
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 }
 
@@ -433,14 +435,13 @@ private fun InsertInMiddleRecipeView(
     var insUri by remember { mutableStateOf<Uri?>(null) }
     var insName by remember { mutableStateOf("") }
     var insPages by remember { mutableIntStateOf(0) }
-    var outputName by remember { mutableStateOf("inserted_document") }
+    var showSaveDialog by remember { mutableStateOf(false) }
 
     val basePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             baseUri = uri
             val name = getFileName(context, uri)
             baseName = name
-            outputName = "inserted_${name.removeSuffix(".pdf")}"
             scope.launch {
                 basePages = PdfEngine.getPageCount(context, uri)
                 insertAfterPage = maxOf(1, basePages / 2)
@@ -544,12 +545,6 @@ private fun InsertInMiddleRecipeView(
         }
 
         item {
-            Spacer(modifier = Modifier.height(4.dp))
-            OutputFileNameField(
-                value = outputName,
-                onValueChange = { outputName = it }
-            )
-            Spacer(modifier = Modifier.height(10.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -559,32 +554,42 @@ private fun InsertInMiddleRecipeView(
                 StudioPrimaryButton(
                     text = "Run 'Insert in Middle' Workflow",
                     enabled = baseUri != null && insUri != null,
-                    onClick = {
-                        onStartProcessing("Executing Split & Insert Workflow...")
-                        scope.launch {
-                            try {
-                                val outFile = fileRepo.createOutputFile(outputName.ifBlank { "inserted_${baseName.removeSuffix(".pdf")}" })
-                                val result = WorkflowEngine.executeInsertInMiddle(
-                                    context = context,
-                                    baseUri = baseUri!!,
-                                    insertAfterPage1Based = insertAfterPage,
-                                    insertUri = insUri!!,
-                                    outputFile = outFile,
-                                    onProgress = { prog -> onStartProcessing(prog.stepDescription) }
-                                )
-                                fileRepo.refreshFiles()
-                                onEndProcessing()
-                                Toast.makeText(context, "Document inserted successfully!", Toast.LENGTH_SHORT).show()
-                                onFinished(result)
-                            } catch (e: Exception) {
-                                onEndProcessing()
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    onClick = { showSaveDialog = true }
                 )
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "inserted_${baseName.removeSuffix(".pdf")}",
+            title = "Save Inserted PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                onStartProcessing("Executing Split & Insert Workflow...")
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = WorkflowEngine.executeInsertInMiddle(
+                            context = context,
+                            baseUri = baseUri!!,
+                            insertAfterPage1Based = insertAfterPage,
+                            insertUri = insUri!!,
+                            outputFile = outFile,
+                            onProgress = { prog -> onStartProcessing(prog.stepDescription) }
+                        )
+                        fileRepo.refreshFiles()
+                        onEndProcessing()
+                        Toast.makeText(context, "Document inserted successfully!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        onEndProcessing()
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 }
 
@@ -605,7 +610,7 @@ private fun CustomPipelineContent(
     var inputUri by remember { mutableStateOf<Uri?>(null) }
     var inputName by remember { mutableStateOf("") }
     var inputPages by remember { mutableIntStateOf(0) }
-    var outputName by remember { mutableStateOf("pipeline_output") }
+    var showSaveDialog by remember { mutableStateOf(false) }
 
     val steps = remember { mutableStateListOf<WorkflowStepItem>() }
     var showAddStepSheet by remember { mutableStateOf(false) }
@@ -613,9 +618,7 @@ private fun CustomPipelineContent(
     val inputPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             inputUri = uri
-            val name = getFileName(context, uri)
-            inputName = name
-            outputName = "pipeline_${name.removeSuffix(".pdf")}"
+            inputName = getFileName(context, uri)
             scope.launch {
                 inputPages = PdfEngine.getPageCount(context, uri)
             }
@@ -734,12 +737,6 @@ private fun CustomPipelineContent(
 
         // Run Button
         item {
-            Spacer(modifier = Modifier.height(4.dp))
-            OutputFileNameField(
-                value = outputName,
-                onValueChange = { outputName = it }
-            )
-            Spacer(modifier = Modifier.height(10.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -749,31 +746,41 @@ private fun CustomPipelineContent(
                 StudioPrimaryButton(
                     text = "Run Daisy-Chain Pipeline",
                     enabled = inputUri != null && steps.isNotEmpty(),
-                    onClick = {
-                        onStartProcessing("Starting pipeline execution...")
-                        scope.launch {
-                            try {
-                                val outFile = fileRepo.createOutputFile(outputName.ifBlank { "pipeline_output_${inputName.removeSuffix(".pdf")}" })
-                                val result = WorkflowEngine.executePipeline(
-                                    context = context,
-                                    initialUri = inputUri!!,
-                                    steps = steps.toList(),
-                                    finalOutputFile = outFile,
-                                    onProgress = { p -> onUpdateProgress(p.stepDescription) }
-                                )
-                                fileRepo.refreshFiles()
-                                onEndProcessing()
-                                Toast.makeText(context, "Pipeline completed!", Toast.LENGTH_SHORT).show()
-                                onFinished(result)
-                            } catch (e: Exception) {
-                                onEndProcessing()
-                                Toast.makeText(context, "Pipeline error: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    onClick = { showSaveDialog = true }
                 )
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "pipeline_output_${inputName.removeSuffix(".pdf")}",
+            title = "Save Pipeline Output",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                onStartProcessing("Starting pipeline execution...")
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = WorkflowEngine.executePipeline(
+                            context = context,
+                            initialUri = inputUri!!,
+                            steps = steps.toList(),
+                            finalOutputFile = outFile,
+                            onProgress = { p -> onUpdateProgress(p.stepDescription) }
+                        )
+                        fileRepo.refreshFiles()
+                        onEndProcessing()
+                        Toast.makeText(context, "Pipeline completed!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        onEndProcessing()
+                        Toast.makeText(context, "Pipeline error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     // Add Step Bottom Sheet / Dialog

@@ -71,10 +71,10 @@ fun DeletePagesScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputName by remember { mutableStateOf("") }
     var pageCount by remember { mutableIntStateOf(0) }
     val pageThumbnails = remember { mutableStateMapOf<Int, Bitmap?>() }
     val pagesToDelete = remember { mutableStateListOf<Int>() }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -84,7 +84,6 @@ fun DeletePagesScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputName = "deleted_${name.removeSuffix(".pdf")}"
             pagesToDelete.clear()
             pageThumbnails.clear()
             scope.launch {
@@ -165,16 +164,8 @@ fun DeletePagesScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Bottom button container with navigation safe space
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -185,26 +176,36 @@ fun DeletePagesScreen(
                         text = if (pagesToDelete.isEmpty()) "Select Pages to Delete" else "Delete ${pagesToDelete.size} Page(s) & Save",
                         enabled = pagesToDelete.isNotEmpty() && pagesToDelete.size < pageCount && !isProcessing,
                         gradient = androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(AppColors.Danger, Color(0xFFE11D48))),
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outFile = fileRepo.createOutputFile(outputName.ifBlank { "deleted_${fileName.removeSuffix(".pdf")}" })
-                                    val result = PdfEngine.deletePages(context, selectedUri!!, pagesToDelete.toSet(), outFile)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Saved: ${result.name}", Toast.LENGTH_SHORT).show()
-                                    onFinished(result)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "deleted_${fileName.removeSuffix(".pdf")}",
+            title = "Save PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = PdfEngine.deletePages(context, selectedUri!!, pagesToDelete.toSet(), outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Saved: ${result.name}", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -226,7 +227,7 @@ fun MergePdfsScreen(
 
     data class MergeItem(val uri: Uri, val name: String, val size: Long, var pages: Int = 0)
     val mergeList = remember { mutableStateListOf<MergeItem>() }
-    var outputName by remember { mutableStateOf("merged_document") }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val multiPicker = rememberLauncherForActivityResult(
@@ -369,13 +370,6 @@ fun MergePdfsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutputFileNameField(
-                value = outputName,
-                onValueChange = { outputName = it }
-            )
-
             Spacer(modifier = Modifier.height(12.dp))
 
             Box(
@@ -387,25 +381,35 @@ fun MergePdfsScreen(
                 StudioPrimaryButton(
                     text = "Merge ${mergeList.size} PDFs",
                     enabled = mergeList.size >= 2 && !isProcessing,
-                    onClick = {
-                        isProcessing = true
-                        scope.launch {
-                            try {
-                                val outFile = fileRepo.createOutputFile(outputName.ifBlank { "merged_document" })
-                                val result = PdfEngine.mergePdfs(context, mergeList.map { it.uri }, outFile)
-                                fileRepo.refreshFiles()
-                                isProcessing = false
-                                Toast.makeText(context, "Merged successfully!", Toast.LENGTH_SHORT).show()
-                                onFinished(result)
-                            } catch (e: Exception) {
-                                isProcessing = false
-                                Toast.makeText(context, "Merge failed: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    onClick = { showSaveDialog = true }
                 )
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "merged_document",
+            title = "Save Merged PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = PdfEngine.mergePdfs(context, mergeList.map { it.uri }, outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Merged successfully!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Merge failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -435,7 +439,7 @@ fun ReplacePageToolScreen(
     var repPages by remember { mutableIntStateOf(0) }
     var repPageNum by remember { mutableIntStateOf(1) }
 
-    var outputName by remember { mutableStateOf("replaced_page_doc") }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val basePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -443,7 +447,6 @@ fun ReplacePageToolScreen(
             baseUri = uri
             val name = getFileName(context, uri)
             baseName = name
-            outputName = "replaced_${name.removeSuffix(".pdf")}"
             scope.launch {
                 basePages = PdfEngine.getPageCount(context, uri)
                 targetPage = 1
@@ -554,13 +557,6 @@ fun ReplacePageToolScreen(
                     }
                 }
             }
-
-            item {
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-            }
         }
 
         Box(
@@ -572,31 +568,41 @@ fun ReplacePageToolScreen(
             StudioPrimaryButton(
                 text = "Replace Page & Save",
                 enabled = baseUri != null && repUri != null && !isProcessing,
-                onClick = {
-                    isProcessing = true
-                    scope.launch {
-                        try {
-                            val outFile = fileRepo.createOutputFile(outputName.ifBlank { "replaced_page_doc" })
-                            val result = WorkflowEngine.executeReplacePage(
-                                context = context,
-                                baseUri = baseUri!!,
-                                targetPage1Based = targetPage,
-                                replacementUri = repUri!!,
-                                replacementPage1Based = repPageNum,
-                                outputFile = outFile
-                            )
-                            fileRepo.refreshFiles()
-                            isProcessing = false
-                            Toast.makeText(context, "Page $targetPage replaced!", Toast.LENGTH_SHORT).show()
-                            onFinished(result)
-                        } catch (e: Exception) {
-                            isProcessing = false
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
+                onClick = { showSaveDialog = true }
             )
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "replaced_${baseName.removeSuffix(".pdf")}",
+            title = "Save Replaced PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = WorkflowEngine.executeReplacePage(
+                            context = context,
+                            baseUri = baseUri!!,
+                            targetPage1Based = targetPage,
+                            replacementUri = repUri!!,
+                            replacementPage1Based = repPageNum,
+                            outputFile = outFile
+                        )
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Page $targetPage replaced!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -625,7 +631,7 @@ fun InsertInMiddleToolScreen(
     var insName by remember { mutableStateOf("") }
     var insPages by remember { mutableIntStateOf(0) }
 
-    var outputName by remember { mutableStateOf("inserted_document") }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val basePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -633,7 +639,6 @@ fun InsertInMiddleToolScreen(
             baseUri = uri
             val name = getFileName(context, uri)
             baseName = name
-            outputName = "inserted_${name.removeSuffix(".pdf")}"
             scope.launch {
                 basePages = PdfEngine.getPageCount(context, uri)
                 insertAfterPage = maxOf(1, basePages / 2)
@@ -728,13 +733,6 @@ fun InsertInMiddleToolScreen(
                     }
                 }
             }
-
-            item {
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-            }
         }
 
         Box(
@@ -746,30 +744,40 @@ fun InsertInMiddleToolScreen(
             StudioPrimaryButton(
                 text = "Insert PDF & Save",
                 enabled = baseUri != null && insUri != null && !isProcessing,
-                onClick = {
-                    isProcessing = true
-                    scope.launch {
-                        try {
-                            val outFile = fileRepo.createOutputFile(outputName.ifBlank { "inserted_document" })
-                            val result = WorkflowEngine.executeInsertInMiddle(
-                                context = context,
-                                baseUri = baseUri!!,
-                                insertAfterPage1Based = insertAfterPage,
-                                insertUri = insUri!!,
-                                outputFile = outFile
-                            )
-                            fileRepo.refreshFiles()
-                            isProcessing = false
-                            Toast.makeText(context, "Inserted successfully!", Toast.LENGTH_SHORT).show()
-                            onFinished(result)
-                        } catch (e: Exception) {
-                            isProcessing = false
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
+                onClick = { showSaveDialog = true }
             )
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "inserted_${baseName.removeSuffix(".pdf")}",
+            title = "Save Inserted PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = WorkflowEngine.executeInsertInMiddle(
+                            context = context,
+                            baseUri = baseUri!!,
+                            insertAfterPage1Based = insertAfterPage,
+                            insertUri = insUri!!,
+                            outputFile = outFile
+                        )
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Inserted successfully!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -791,10 +799,10 @@ fun ReorderPagesScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputName by remember { mutableStateOf("") }
     val orderedPages = remember { mutableStateListOf<Int>() }
     val pageThumbnails = remember { mutableStateMapOf<Int, Bitmap?>() }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -804,7 +812,6 @@ fun ReorderPagesScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputName = "reordered_${name.removeSuffix(".pdf")}"
             orderedPages.clear()
             pageThumbnails.clear()
             selectedIndex = null
@@ -918,13 +925,6 @@ fun ReorderPagesScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Box(
@@ -936,26 +936,36 @@ fun ReorderPagesScreen(
                     StudioPrimaryButton(
                         text = "Save Reordered PDF",
                         enabled = orderedPages.isNotEmpty() && !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outFile = fileRepo.createOutputFile(outputName.ifBlank { "reordered_${fileName.removeSuffix(".pdf")}" })
-                                    val result = PdfEngine.reorderPages(context, selectedUri!!, orderedPages.toList(), outFile)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Saved successfully!", Toast.LENGTH_SHORT).show()
-                                    onFinished(result)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "reordered_${fileName.removeSuffix(".pdf")}",
+            title = "Save Reordered PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = PdfEngine.reorderPages(context, selectedUri!!, orderedPages.toList(), outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Saved successfully!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -977,10 +987,10 @@ fun ExtractPagesScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputName by remember { mutableStateOf("") }
     var pageCount by remember { mutableIntStateOf(0) }
     val pageThumbnails = remember { mutableStateMapOf<Int, Bitmap?>() }
     val pagesToExtract = remember { mutableStateListOf<Int>() }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -990,7 +1000,6 @@ fun ExtractPagesScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputName = "extracted_${name.removeSuffix(".pdf")}"
             pagesToExtract.clear()
             pageThumbnails.clear()
             scope.launch {
@@ -1078,13 +1087,6 @@ fun ExtractPagesScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Box(
@@ -1096,26 +1098,36 @@ fun ExtractPagesScreen(
                     StudioPrimaryButton(
                         text = "Extract ${pagesToExtract.size} Page(s) & Save",
                         enabled = pagesToExtract.isNotEmpty() && !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outFile = fileRepo.createOutputFile(outputName.ifBlank { "extracted_${fileName.removeSuffix(".pdf")}" })
-                                    val result = PdfEngine.extractPages(context, selectedUri!!, pagesToExtract.sorted(), outFile)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Extracted successfully!", Toast.LENGTH_SHORT).show()
-                                    onFinished(result)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "extracted_${fileName.removeSuffix(".pdf")}",
+            title = "Save Extracted PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = PdfEngine.extractPages(context, selectedUri!!, pagesToExtract.sorted(), outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Extracted successfully!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -1137,9 +1149,9 @@ fun SplitPdfScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputBaseName by remember { mutableStateOf("") }
     var pageCount by remember { mutableIntStateOf(0) }
     var splitAfterPage by remember { mutableIntStateOf(1) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -1149,7 +1161,6 @@ fun SplitPdfScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputBaseName = name.removeSuffix(".pdf")
             scope.launch {
                 val count = PdfEngine.getPageCount(context, uri)
                 pageCount = count
@@ -1251,13 +1262,6 @@ fun SplitPdfScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                OutputFileNameField(
-                    value = outputBaseName,
-                    onValueChange = { outputBaseName = it }
-                )
-
                 Spacer(modifier = Modifier.weight(1f))
 
                 Box(
@@ -1269,28 +1273,37 @@ fun SplitPdfScreen(
                     StudioPrimaryButton(
                         text = "Split Document",
                         enabled = pageCount > 1 && !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val base = outputBaseName.ifBlank { fileName.removeSuffix(".pdf") }
-                                    val part1File = fileRepo.createOutputFile("${base}_part1")
-                                    val part2File = fileRepo.createOutputFile("${base}_part2")
-                                    val result = PdfEngine.splitPdf(context, selectedUri!!, splitAfterPage, part1File, part2File)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Split completed into 2 files!", Toast.LENGTH_SHORT).show()
-                                    onFinished(result.first)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Split error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = fileName.removeSuffix(".pdf"),
+            title = "Split Base Name",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val part1File = fileRepo.createOutputFile("${chosenName}_part1")
+                        val part2File = fileRepo.createOutputFile("${chosenName}_part2")
+                        val result = PdfEngine.splitPdf(context, selectedUri!!, splitAfterPage, part1File, part2File)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Split completed into 2 files!", Toast.LENGTH_SHORT).show()
+                        onFinished(result.first)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Split error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -1312,12 +1325,12 @@ fun RotatePagesScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputName by remember { mutableStateOf("") }
     var pageCount by remember { mutableIntStateOf(0) }
     var rotationAngle by remember { mutableIntStateOf(90) }
     var applyToAll by remember { mutableStateOf(true) }
     val selectedPages = remember { mutableStateListOf<Int>() }
     val pageThumbnails = remember { mutableStateMapOf<Int, Bitmap?>() }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -1327,7 +1340,6 @@ fun RotatePagesScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputName = "rotated_${name.removeSuffix(".pdf")}"
             selectedPages.clear()
             pageThumbnails.clear()
             scope.launch {
@@ -1433,13 +1445,6 @@ fun RotatePagesScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Box(
@@ -1451,27 +1456,37 @@ fun RotatePagesScreen(
                     StudioPrimaryButton(
                         text = "Apply Rotation & Save",
                         enabled = (applyToAll || selectedPages.isNotEmpty()) && !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outFile = fileRepo.createOutputFile(outputName.ifBlank { "rotated_${fileName.removeSuffix(".pdf")}" })
-                                    val targets = if (applyToAll) null else selectedPages.toSet()
-                                    val result = PdfEngine.rotatePages(context, selectedUri!!, rotationAngle, targets, outFile)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Rotated and saved!", Toast.LENGTH_SHORT).show()
-                                    onFinished(result)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "rotated_${fileName.removeSuffix(".pdf")}",
+            title = "Save Rotated PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val targets = if (applyToAll) null else selectedPages.toSet()
+                        val result = PdfEngine.rotatePages(context, selectedUri!!, rotationAngle, targets, outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Rotated and saved!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -1492,8 +1507,8 @@ fun ImageToPdfScreen(
     val scope = rememberCoroutineScope()
 
     val imageUris = remember { mutableStateListOf<Uri>() }
-    var outputName by remember { mutableStateOf("images_converted") }
     var fitPage by remember { mutableStateOf(true) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
@@ -1605,13 +1620,6 @@ fun ImageToPdfScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutputFileNameField(
-                value = outputName,
-                onValueChange = { outputName = it }
-            )
-
             Spacer(modifier = Modifier.height(12.dp))
 
             Box(
@@ -1623,25 +1631,35 @@ fun ImageToPdfScreen(
                 StudioPrimaryButton(
                     text = "Generate PDF from ${imageUris.size} Images",
                     enabled = imageUris.isNotEmpty() && !isProcessing,
-                    onClick = {
-                        isProcessing = true
-                        scope.launch {
-                            try {
-                                val outFile = fileRepo.createOutputFile(outputName.ifBlank { "images_converted" })
-                                val result = PdfEngine.imagesToPdf(context, imageUris.toList(), fitPage, outFile)
-                                fileRepo.refreshFiles()
-                                isProcessing = false
-                                Toast.makeText(context, "PDF Created!", Toast.LENGTH_SHORT).show()
-                                onFinished(result)
-                            } catch (e: Exception) {
-                                isProcessing = false
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    onClick = { showSaveDialog = true }
                 )
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "images_converted",
+            title = "Save PDF Document",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = PdfEngine.imagesToPdf(context, imageUris.toList(), fitPage, outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "PDF Created!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -1813,7 +1831,6 @@ fun CropPdfScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputName by remember { mutableStateOf("") }
     var pageCount by remember { mutableIntStateOf(0) }
     var currentPage0Based by remember { mutableIntStateOf(0) }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -1823,6 +1840,7 @@ fun CropPdfScreen(
     var rightPercent by remember { mutableFloatStateOf(0.05f) }
     var bottomPercent by remember { mutableFloatStateOf(0.05f) }
     var applyToAll by remember { mutableStateOf(true) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     fun loadCurrentPage(uri: Uri, page: Int) {
@@ -1838,7 +1856,6 @@ fun CropPdfScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputName = "cropped_${name.removeSuffix(".pdf")}"
             currentPage0Based = 0
             scope.launch {
                 pageCount = PdfEngine.getPageCount(context, uri)
@@ -1945,13 +1962,6 @@ fun CropPdfScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                OutputFileNameField(
-                    value = outputName,
-                    onValueChange = { outputName = it }
-                )
-
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Box(
@@ -1963,36 +1973,46 @@ fun CropPdfScreen(
                     StudioPrimaryButton(
                         text = "Crop & Save PDF",
                         enabled = !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outFile = fileRepo.createOutputFile(outputName.ifBlank { "cropped_${fileName.removeSuffix(".pdf")}" })
-                                    val targets = if (applyToAll) null else setOf(currentPage0Based + 1)
-                                    val result = PdfEngine.cropPdf(
-                                        context = context,
-                                        uri = selectedUri!!,
-                                        leftPercent = leftPercent,
-                                        topPercent = topPercent,
-                                        rightPercent = rightPercent,
-                                        bottomPercent = bottomPercent,
-                                        pages1Based = targets,
-                                        outputFile = outFile
-                                    )
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Cropped successfully!", Toast.LENGTH_SHORT).show()
-                                    onFinished(result)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Crop error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "cropped_${fileName.removeSuffix(".pdf")}",
+            title = "Save Cropped PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val targets = if (applyToAll) null else setOf(currentPage0Based + 1)
+                        val result = PdfEngine.cropPdf(
+                            context = context,
+                            uri = selectedUri!!,
+                            leftPercent = leftPercent,
+                            topPercent = topPercent,
+                            rightPercent = rightPercent,
+                            bottomPercent = bottomPercent,
+                            pages1Based = targets,
+                            outputFile = outFile
+                        )
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Cropped successfully!", Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Crop error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -2014,10 +2034,10 @@ fun CompressPdfScreen(
 
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("") }
-    var outputName by remember { mutableStateOf("") }
     var pageCount by remember { mutableIntStateOf(0) }
     var originalSizeBytes by remember { mutableLongStateOf(0L) }
     var selectedLevel by remember { mutableStateOf(CompressionLevel.MEDIUM) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -2027,7 +2047,6 @@ fun CompressPdfScreen(
             selectedUri = uri
             val name = getFileName(context, uri)
             fileName = name
-            outputName = "compressed_${name.removeSuffix(".pdf")}"
             scope.launch {
                 try {
                     context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -2110,14 +2129,6 @@ fun CompressPdfScreen(
                             }
                         }
                     }
-
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        OutputFileNameField(
-                            value = outputName,
-                            onValueChange = { outputName = it }
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -2131,30 +2142,40 @@ fun CompressPdfScreen(
                     StudioPrimaryButton(
                         text = "Compress PDF",
                         enabled = !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outFile = fileRepo.createOutputFile(outputName.ifBlank { "compressed_${fileName.removeSuffix(".pdf")}" })
-                                    val result = PdfEngine.compressPdf(context, selectedUri!!, selectedLevel, outFile)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    val savedPct = if (originalSizeBytes > 0) {
-                                        val saved = ((originalSizeBytes - result.length()).toFloat() / originalSizeBytes * 100).toInt()
-                                        "Saved ~$saved% space!"
-                                    } else "Compressed successfully!"
-                                    Toast.makeText(context, savedPct, Toast.LENGTH_SHORT).show()
-                                    onFinished(result)
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Compression error: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        SaveFileNameDialog(
+            initialName = "compressed_${fileName.removeSuffix(".pdf")}",
+            title = "Save Compressed PDF",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val outFile = fileRepo.createOutputFile(chosenName)
+                        val result = PdfEngine.compressPdf(context, selectedUri!!, selectedLevel, outFile)
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        val savedPct = if (originalSizeBytes > 0) {
+                            val saved = ((originalSizeBytes - result.length()).toFloat() / originalSizeBytes * 100).toInt()
+                            "Saved ~$saved% space!"
+                        } else "Compressed successfully!"
+                        Toast.makeText(context, savedPct, Toast.LENGTH_SHORT).show()
+                        onFinished(result)
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Compression error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {
@@ -2165,33 +2186,6 @@ fun CompressPdfScreen(
 /* ===================================================================================
    SHARED COMMON SUB-COMPONENTS
    =================================================================================== */
-
-@Composable
-fun OutputFileNameField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text("Output File Name", color = AppColors.TextMuted, fontSize = 12.sp) },
-        singleLine = true,
-        trailingIcon = {
-            Text(".pdf", color = AppColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(end = 12.dp))
-        },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AppColors.Accent,
-            unfocusedBorderColor = AppColors.Border,
-            focusedTextColor = AppColors.Text,
-            unfocusedTextColor = AppColors.Text,
-            focusedContainerColor = AppColors.Surface,
-            unfocusedContainerColor = AppColors.Surface
-        ),
-        shape = RoundedCornerShape(AppRadius.md),
-        modifier = modifier.fillMaxWidth()
-    )
-}
 
 @Composable
 fun EmptyFilePickerPlaceholder(
