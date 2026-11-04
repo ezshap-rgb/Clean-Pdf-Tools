@@ -1,6 +1,7 @@
 package com.cleanpdftools.app.ui.components
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
@@ -51,40 +52,56 @@ fun EmbeddedPdfViewerDialog(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Load PDF page count and start loading pages
+    // Load PDF or image pages
     LaunchedEffect(file) {
         withContext(Dispatchers.IO) {
-            var pfd: ParcelFileDescriptor? = null
-            var renderer: PdfRenderer? = null
-            try {
-                pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                renderer = PdfRenderer(pfd)
-                totalPages = renderer.pageCount
+            val isPdf = file.extension.equals("pdf", ignoreCase = true)
+            if (isPdf) {
+                var pfd: ParcelFileDescriptor? = null
+                var renderer: PdfRenderer? = null
+                try {
+                    pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                    renderer = PdfRenderer(pfd)
+                    totalPages = renderer.pageCount
 
-                val displayMetrics = context.resources.displayMetrics
-                val screenWidthPx = displayMetrics.widthPixels
+                    val displayMetrics = context.resources.displayMetrics
+                    val screenWidthPx = displayMetrics.widthPixels
 
-                for (i in 0 until totalPages) {
-                    val page = renderer.openPage(i)
-                    val aspectRatio = page.height.toFloat() / page.width.toFloat()
-                    val targetW = minOf(screenWidthPx, (page.width * 2f).roundToInt())
-                    val targetH = max(1, (targetW * aspectRatio).roundToInt())
+                    for (i in 0 until totalPages) {
+                        val page = renderer.openPage(i)
+                        val aspectRatio = page.height.toFloat() / page.width.toFloat()
+                        val targetW = minOf(screenWidthPx, (page.width * 2f).roundToInt())
+                        val targetH = max(1, (targetW * aspectRatio).roundToInt())
 
-                    val bitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                    val canvas = Canvas(bitmap)
-                    canvas.drawColor(Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    page.close()
+                        val bitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(bitmap)
+                        canvas.drawColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        page.close()
 
-                    withContext(Dispatchers.Main) {
-                        renderedPages[i] = bitmap
+                        withContext(Dispatchers.Main) {
+                            renderedPages[i] = bitmap
+                        }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    try { renderer?.close() } catch (_: Exception) {}
+                    try { pfd?.close() } catch (_: Exception) {}
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                try { renderer?.close() } catch (_: Exception) {}
-                try { pfd?.close() } catch (_: Exception) {}
+            } else {
+                // Image file (PNG, JPG, etc.)
+                try {
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                    if (bitmap != null) {
+                        totalPages = 1
+                        withContext(Dispatchers.Main) {
+                            renderedPages[0] = bitmap
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }

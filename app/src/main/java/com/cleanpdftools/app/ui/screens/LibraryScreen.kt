@@ -135,11 +135,7 @@ fun LibraryScreen(
                     FileLibraryCard(
                         item = item,
                         onView = {
-                            if (item.name.endsWith(".pdf", ignoreCase = true)) {
-                                viewingFile = item.file
-                            } else {
-                                fileRepo.openFile(item.file)
-                            }
+                            viewingFile = item.file
                         },
                         onRename = {
                             fileToRename = item
@@ -330,21 +326,21 @@ private fun FileLibraryCard(
                     )
                 }
 
-                if (item.pageCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(AppRadius.pill))
-                            .background(AppColors.SurfaceRaised)
-                            .border(1.dp, AppColors.Border, RoundedCornerShape(AppRadius.pill))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "${item.pageCount} pgs",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = AppColors.Accent
-                        )
-                    }
+                val isPdf = item.name.endsWith(".pdf", ignoreCase = true)
+                val badgeText = if (isPdf) "${item.pageCount} pgs" else item.file.extension.uppercase()
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(AppRadius.pill))
+                        .background(AppColors.SurfaceRaised)
+                        .border(1.dp, AppColors.Border, RoundedCornerShape(AppRadius.pill))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = badgeText,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isPdf) AppColors.Accent else Color(0xFFEC4899)
+                    )
                 }
             }
 

@@ -30,11 +30,15 @@ class FileRepository(private val context: Context) {
             return dir
         }
 
+    val outputDirectory: File
+        get() = outputDir
+
     fun createOutputFile(preferredName: String, extension: String = "pdf"): File {
         val cleanName = preferredName
             .removeSuffix(".pdf")
             .removeSuffix(".png")
             .removeSuffix(".jpg")
+            .removeSuffix(".jpeg")
             .replace("[^a-zA-Z0-9_\\-\\s]".toRegex(), "_")
             .trim()
             .ifBlank { "CleanPdfDocument" }
@@ -53,6 +57,7 @@ class FileRepository(private val context: Context) {
             .removeSuffix(".pdf")
             .removeSuffix(".png")
             .removeSuffix(".jpg")
+            .removeSuffix(".jpeg")
             .replace("[^a-zA-Z0-9_\\-\\s]".toRegex(), "_")
             .trim()
 
@@ -79,7 +84,12 @@ class FileRepository(private val context: Context) {
 
     suspend fun refreshFiles() = withContext(Dispatchers.IO) {
         val files = outputDir.listFiles { file ->
-            file.isFile && (file.extension.equals("pdf", ignoreCase = true) || file.extension.equals("png", ignoreCase = true) || file.extension.equals("jpg", ignoreCase = true))
+            file.isFile && (
+                file.extension.equals("pdf", ignoreCase = true) ||
+                file.extension.equals("png", ignoreCase = true) ||
+                file.extension.equals("jpg", ignoreCase = true) ||
+                file.extension.equals("jpeg", ignoreCase = true)
+            )
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
 
         val list = files.map { file ->
@@ -92,6 +102,8 @@ class FileRepository(private val context: Context) {
                 } catch (_: Exception) {
                     pages = 1
                 }
+            } else {
+                pages = 1
             }
             ProcessedPdfFile(
                 file = file,
@@ -153,7 +165,13 @@ class FileRepository(private val context: Context) {
      */
     suspend fun saveToDownloads(file: File): Uri? = withContext(Dispatchers.IO) {
         try {
-            val mimeType = if (file.extension.equals("pdf", ignoreCase = true)) "application/pdf" else "image/png"
+            val isPdf = file.extension.equals("pdf", ignoreCase = true)
+            val isJpg = file.extension.equals("jpg", ignoreCase = true) || file.extension.equals("jpeg", ignoreCase = true)
+            val mimeType = when {
+                isPdf -> "application/pdf"
+                isJpg -> "image/jpeg"
+                else -> "image/png"
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)

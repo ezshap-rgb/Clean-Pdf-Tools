@@ -1684,6 +1684,7 @@ fun PdfToImagesScreen(
     var pageCount by remember { mutableIntStateOf(0) }
     var format by remember { mutableStateOf(Bitmap.CompressFormat.PNG) }
     var dpi by remember { mutableIntStateOf(150) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -1790,26 +1791,51 @@ fun PdfToImagesScreen(
                     StudioPrimaryButton(
                         text = "Export $pageCount Pages as Images",
                         enabled = pageCount > 0 && !isProcessing,
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val outDir = File(context.getExternalFilesDir(null), "CleanPdfTools/Images_${System.currentTimeMillis()}").apply { mkdirs() }
-                                    val files = PdfEngine.pdfToImages(context, selectedUri!!, null, format, dpi, outDir)
-                                    fileRepo.refreshFiles()
-                                    isProcessing = false
-                                    Toast.makeText(context, "Exported ${files.size} images!", Toast.LENGTH_SHORT).show()
-                                    if (files.isNotEmpty()) onFinished(files.first())
-                                } catch (e: Exception) {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        onClick = { showSaveDialog = true }
                     )
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        val ext = if (format == Bitmap.CompressFormat.JPEG) "jpg" else "png"
+        SaveFileNameDialog(
+            initialName = "images_${fileName.removeSuffix(".pdf")}",
+            extension = ext,
+            title = "Export Images Prefix",
+            onDismiss = { showSaveDialog = false },
+            onConfirm = { chosenName ->
+                showSaveDialog = false
+                isProcessing = true
+                scope.launch {
+                    try {
+                        val files = PdfEngine.pdfToImages(
+                            context = context,
+                            uri = selectedUri!!,
+                            baseName = chosenName,
+                            pages1Based = null,
+                            format = format,
+                            dpi = dpi,
+                            outputDir = fileRepo.outputDirectory
+                        )
+                        // Also automatically save each image directly to device Downloads / Gallery
+                        for (imgFile in files) {
+                            try {
+                                fileRepo.saveToDownloads(imgFile)
+                            } catch (_: Exception) {}
+                        }
+                        fileRepo.refreshFiles()
+                        isProcessing = false
+                        Toast.makeText(context, "Exported ${files.size} image(s) to Library & Downloads!", Toast.LENGTH_SHORT).show()
+                        if (files.isNotEmpty()) onFinished(files.first())
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
     }
 
     if (isProcessing) {

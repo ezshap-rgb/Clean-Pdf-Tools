@@ -311,6 +311,7 @@ object PdfEngine {
     suspend fun pdfToImages(
         context: Context,
         uri: Uri,
+        baseName: String = "page",
         pages1Based: List<Int>? = null,
         format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG,
         dpi: Int = 150,
@@ -329,6 +330,13 @@ object PdfEngine {
 
             val scale = dpi.toFloat() / 72f
             val ext = if (format == Bitmap.CompressFormat.JPEG) "jpg" else "png"
+            val cleanBase = baseName
+                .removeSuffix(".pdf")
+                .removeSuffix(".png")
+                .removeSuffix(".jpg")
+                .replace("[^a-zA-Z0-9_\\-\\s]".toRegex(), "_")
+                .trim()
+                .ifBlank { "page" }
 
             for (pageIdx in targetPages0Based) {
                 val page = renderer.openPage(pageIdx)
@@ -341,7 +349,7 @@ object PdfEngine {
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                 page.close()
 
-                val outFile = File(outputDir, "page_${pageIdx + 1}_${System.currentTimeMillis()}.$ext")
+                val outFile = File(outputDir, "${cleanBase}_p${pageIdx + 1}.$ext")
                 FileOutputStream(outFile).use { out ->
                     bitmap.compress(format, 90, out)
                 }
